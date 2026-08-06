@@ -55,7 +55,7 @@ TARGET = $(OBJDIR)/$(IMAGE)
 
 # Stated explicitly because the first rule this file sees comes from an
 # included makefile, and that would otherwise decide the default goal.
-.DEFAULT_GOAL := $(TARGET).img
+.DEFAULT_GOAL := image
 
 # ---------------------------------------------------------------------------
 # Sources
@@ -64,7 +64,7 @@ TARGET = $(OBJDIR)/$(IMAGE)
 # This project's own code: the kernel wrapper, the syscall layer, and the
 # parts of SDL2 that circle-libsdl2 does not implement and this game needs.
 # Each file says at its top what it is answering for.
-HOST_SRCS = main.cpp kernel.cpp circle_syscalls.cpp circle_stubs.cpp \
+HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp circle_stubs.cpp \
 	sdl2_paths.cpp sdl2_stdinc.cpp sdl2_window.cpp sdl2_surface.cpp \
 	sdl2_texture.cpp sdl2_render.cpp sdl2_keyname.cpp sdl2_bmp.cpp \
 	sdl2_image.cpp sdl2_audiocvt.cpp sdl2_mixer.cpp nx_pngfuncs.cpp
@@ -295,7 +295,30 @@ $(OBJDIR):
 # The image link rule, from the shim: it links with a script that keeps the
 # TLS sections adjacent, which binutils 2.44 and later require and which
 # libc++'s threading support needs.
+# The image link rule. sdl-app.mk lets the caller choose the linker script,
+# so this build supplies its own: the shim's script with room made at image
+# offset 0x800 for the patchable-defaults block. Everything else about the
+# script — including the TLS-section adjacency binutils 2.44 and later
+# require — is inherited from the shim's.
+SDL_APP_LDSCRIPT = $(CURDIR)/nxengine-evo-defaults.ld
 include $(SHIM)/sdl-app.mk
+
+# The other half of the guarantee the linker script's ASSERTs begin: check
+# the BYTES of the finished image, not just the link. A pre-boot writer
+# refuses to stamp an image whose magic is not at 0x800, so an image that
+# lost it would boot and then quietly ignore everything ever sent to it —
+# including --rapi-perf and --rapi-debug-uart, which are how the board is
+# measured and driven when nobody is at the bench. Better no image than that.
+.PHONY: image
+image: $(TARGET).img
+	@if [ "`dd if=$(TARGET).img bs=4 skip=512 count=1 2>/dev/null`" = "PM8D" ]; \
+	then \
+		echo "  GATE  $(TARGET).img defaults block at 0x800: present"; \
+	else \
+		echo "  GATE  $(TARGET).img: defaults block ABSENT at 0x800 — image deleted"; \
+		rm -f $(TARGET).img; \
+		exit 1; \
+	fi
 
 # Board-scoped clean: drop just this board's tree, leaving the other two
 # boards' images and objects untouched.

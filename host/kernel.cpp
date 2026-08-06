@@ -26,6 +26,8 @@
 // circle_syscalls.cpp.
 //
 #include "kernel.h"
+#include "defaults.h"
+#include "defaultsblock.h"
 #include <circle/startup.h>
 #include <circle/machineinfo.h>
 #include <SDL2/SDL_circle.h>
@@ -53,8 +55,21 @@ static const char From[] = "nxengine";
 
 // The engine reads no options from its command line, so this is the whole of
 // it: the program name, as every C program is given.
+//
+// It is still passed through the defaults block, because the block carries
+// the KERNEL's switches as well as a game's arguments — `--rapi-perf`,
+// `--rapi-debug-uart` — and those have to be taken out and acted on by
+// something. A port that carries the block without reading it passes the
+// image gate, which only checks the magic is present, and then silently
+// ignores every switch ever stamped into it.
 static const char *NxArgv[] = { "nxengine-evo" };
-static const int NxArgc = sizeof(NxArgv) / sizeof(NxArgv[0]);
+
+// The final list: the baked name, plus whatever the block carries once the
+// kernel's own switches have been taken out of it. Sized for the block's
+// worst case — every byte of its capacity a single-character argument.
+static const char *s_FinalArgv[sizeof(NxArgv) / sizeof(NxArgv[0])
+                               + DEFAULTS_BUFFER_BYTES / 2 + 1];
+static int s_FinalArgc = 0;
 
 // ---------------------------------------------------------------------------
 // The gate between core 0 and the application core.
@@ -106,7 +121,7 @@ void CSplitCores::Run(unsigned nCore)
         while (!s_AppGate.load(std::memory_order_acquire))
             asm volatile("wfe" ::: "memory");
 
-        s_AppResult = nx_main(NxArgc, const_cast<char **>(NxArgv));
+        s_AppResult = nx_main(s_FinalArgc, const_cast<char **>(s_FinalArgv));
 
         s_AppDone.store(1, std::memory_order_release);
         PublishToOtherCores();
@@ -250,6 +265,13 @@ TShutdownMode CKernel::Run(void)
                    CMachineInfo::Get()->GetClockRate(CLOCK_ID_CORE) / 1000000,
                    CKernelOptions::Get()->GetSoCMaxTemp());
 
+    // Read the defaults block: dispatch the kernel's own switches and keep
+    // whatever is left as the game's arguments.
+    s_FinalArgc = DefaultsBuildArgv(NxArgv,
+                                    sizeof(NxArgv) / sizeof(NxArgv[0]),
+                                    s_FinalArgv,
+                                    sizeof(s_FinalArgv) / sizeof(s_FinalArgv[0]));
+
     // Move into this game's own directory before the game runs, so anything
     // it opens by a relative name lands there and never in the card's root.
     // SDL_GetBasePath and SDL_GetPrefPath already answer with the same place
@@ -290,7 +312,7 @@ TShutdownMode CKernel::Run(void)
         // path. The secondary cores were never started.
         m_Logger.Write(From, LogNotice,
                        "core split disabled (rapi-split=0): everything on core 0");
-        res = nx_main(NxArgc, const_cast<char **>(NxArgv));
+        res = nx_main(s_FinalArgc, const_cast<char **>(s_FinalArgv));
     }
 
     // Park instead of rebooting. A reboot stops the clocks with the UART
