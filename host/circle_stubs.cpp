@@ -21,20 +21,6 @@
 
 extern "C" {
 
-// ---- the window -------------------------------------------------------------
-//
-// There is one display and the game is always on all of it. The size the
-// application is given is the virtual display the kernel declared before
-// SDL_Init, and it cannot change while the machine runs — so a request to
-// resize the window, or to enter or leave fullscreen, has nothing to do and
-// reports success. The engine calls both from its options menu.
-
-int SDL_SetWindowFullscreen(SDL_Window *, Uint32) { return 0; }
-void SDL_SetWindowSize(SDL_Window *, int, int) {}
-
-// No desktop, no window decoration, nowhere to put an icon.
-void SDL_SetWindowIcon(SDL_Window *, SDL_Surface *) {}
-
 // ---- messages ---------------------------------------------------------------
 //
 // The engine puts its fatal errors in a message box. There is no one at a

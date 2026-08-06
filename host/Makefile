@@ -65,9 +65,9 @@ TARGET = $(OBJDIR)/$(IMAGE)
 # parts of SDL2 that circle-libsdl2 does not implement and this game needs.
 # Each file says at its top what it is answering for.
 HOST_SRCS = main.cpp kernel.cpp circle_syscalls.cpp circle_stubs.cpp \
-	sdl2_paths.cpp sdl2_stdinc.cpp sdl2_surface.cpp sdl2_texture.cpp \
-	sdl2_render.cpp sdl2_keyname.cpp sdl2_bmp.cpp sdl2_image.cpp \
-	sdl2_audiocvt.cpp sdl2_mixer.cpp nx_pngfuncs.cpp
+	sdl2_paths.cpp sdl2_stdinc.cpp sdl2_window.cpp sdl2_surface.cpp \
+	sdl2_texture.cpp sdl2_render.cpp sdl2_keyname.cpp sdl2_bmp.cpp \
+	sdl2_image.cpp sdl2_audiocvt.cpp sdl2_mixer.cpp nx_pngfuncs.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
 # NXEngine-evo's source list, as its own CMakeLists.txt globs it for the `nx`
@@ -216,11 +216,17 @@ WRAPPED_SYSCALLS = \
 	_fcntl mkdir chdir getcwd dup dup2 \
 	opendir readdir closedir rewinddir
 
-# The same technique, for one call the shim already implements. Every texture
-# this port makes has a mirrored twin (sdl2_texture.cpp), and destroying the
-# first has to destroy the second. Wrapping keeps the shim's own
-# SDL_DestroyTexture as the thing that does the work.
-WRAPPED_SDL = SDL_DestroyTexture
+# The same technique, for two calls the shim already implements and this port
+# only needs to happen alongside. Wrapping keeps the library's own version as
+# the thing that does the work:
+#
+#   SDL_DestroyTexture   every texture this port makes has a mirrored twin
+#                        (sdl2_texture.cpp), and destroying the first has to
+#                        destroy the second.
+#   SDL_GetWindowFlags   the window always holds the input focus here, and the
+#                        game refuses to draw into one that does not
+#                        (sdl2_window.cpp).
+WRAPPED_SDL = SDL_DestroyTexture SDL_GetWindowFlags
 
 # The link is driven by the cross ld directly (Circle's Rules.mk sets
 # LD = <prefix>ld for GCC builds), so these are plain linker options, not
