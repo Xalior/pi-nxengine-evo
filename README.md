@@ -121,28 +121,37 @@ that pin is switched on and the processor is left at full speed, instead of
 being slowed. Pin 45 is where a Raspberry Pi 5 Case Fan or Active Cooler is
 wired. On a Pi 3 or a Pi 4 the pin depends on how you wired your own fan.
 
-## What works, and what does not
+## What is built, and what is not yet proven
 
-Working:
+The three kernel images build and link, and the SD card the build stages is
+complete apart from Cave Story's own files. **Nothing here has been run on a
+board yet**, so treat everything below as what the code is written to do
+rather than as what has been seen to happen.
 
-- Fullscreen software rendering, HDMI audio, USB keyboards and USB game
-  controllers, on all three boards.
-- The game's own soundtrack. Cave Story's music is Organya, which the engine
-  synthesises itself one buffer at a time, so it needs no decoder and plays
-  as intended. Sound effects are synthesised the same way.
-- Saved games and settings, written to the card.
+Built and expected to work, because the SDL2 layer underneath it is proven by
+other games on the same boards: fullscreen software rendering, HDMI audio,
+USB keyboards and USB game controllers.
 
-Not working, and why:
+Two parts of the port were checked against a reference decoder on a desktop
+machine, byte for byte, rather than left to the first boot to discover: the
+PNG reader in `host/sdl2_image.cpp` on the engine's own font atlases, and the
+bitmap reader in `host/sdl2_bmp.cpp` on the 24-bit and 8-bit images the
+engine ships.
+
+Known to be missing, and why:
 
 - **Replacement soundtracks.** The optional Ogg Vorbis soundtracks need a
   Vorbis decoder, and there is none on this machine. Choosing one of those
   music directories in the options menu leaves the game silent; the original
-  Organya soundtrack is the one that plays.
+  Organya soundtrack is synthesised by the engine itself and needs no decoder,
+  so that is the one that plays.
 - **Screenshots.** The finished picture is assembled on the presentation core
   and handed straight to the display, so there is nothing for the screenshot
   key to read back.
 - **Rumble.** The engine drives force feedback through `SDL_Haptic`, which the
   SDL2 layer does not implement.
+- **Rotated drawing.** `SDL_RenderCopyEx` here mirrors but does not rotate.
+  The engine only ever asks it to mirror.
 
 There is no GPU driver on bare metal, so everything is drawn by the processor.
 That is the design rather than a limitation: it is what makes one build run
