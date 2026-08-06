@@ -30,9 +30,8 @@
 
 include ../mk/toolchain.mk
 
+BOARDS      = rpi3 rpi4 rpi5
 RAPI_BOARD ?= rpi5
-
-include ../circle-libsdl2/circle-stdlib-$(RAPI_BOARD)/Config.mk
 
 ROOT = ..
 SHIM = $(ROOT)/circle-libsdl2
@@ -47,9 +46,23 @@ IMAGE_rpi3 = kernel8
 IMAGE_rpi4 = kernel8-rpi4
 IMAGE_rpi5 = kernel_2712
 IMAGE = $(IMAGE_$(RAPI_BOARD))
-ifeq ($(IMAGE),)
-$(error unknown RAPI_BOARD '$(RAPI_BOARD)' — expected rpi3, rpi4 or rpi5)
+
+# Before the world is included, so an unknown board is named as an unknown
+# board. After the include it arrives as a missing Config.mk under a directory
+# whose name nobody recognises.
+ifeq ($(filter $(RAPI_BOARD),$(BOARDS)),)
+$(error unknown RAPI_BOARD '$(RAPI_BOARD)' — expected one of: $(BOARDS))
 endif
+
+# The board's circle-stdlib world. A `make deps` that has not been run, or has
+# not finished, leaves this file absent; make would then report that it has no
+# rule to make a Config.mk, which describes the symptom and not the cause.
+WORLD = $(SHIM)/circle-stdlib-$(RAPI_BOARD)
+ifeq ($(wildcard $(WORLD)/Config.mk),)
+$(error the $(RAPI_BOARD) circle-stdlib world is not configured ($(WORLD)/Config.mk is missing) — run 'make deps-$(RAPI_BOARD)' at the repository root)
+endif
+
+include $(WORLD)/Config.mk
 
 TARGET = $(OBJDIR)/$(IMAGE)
 
@@ -146,6 +159,25 @@ STANDARD = -std=gnu++17
 # reconstruction.
 OPTIMIZE = -O2
 
+# Dependency files are written as a side effect of compiling rather than by
+# rules of their own, and Circle's Rules.mk is told to keep its hands off
+# (CHECK_DEPS) so its `-M -MG` .d rules are not defined for these objects.
+#
+# -MG lists a header make has no rule for as a prerequisite of the object,
+# which stops the build; GNU make 3.81 stops with exit 2 and prints not one
+# line saying why, which is why this build asks for 4.0 in mk/toolchain.mk. A
+# .d left over from an earlier build naming a header that has since moved or
+# been deleted stops it the same way, and is why "delete the board's object
+# directory" kept being the cure.
+#
+# -MD writes the dependency file alongside the object it belongs to, so the
+# two can never disagree about the flags that produced them, and -MP adds a
+# rule with no recipe for every header named, so a header that disappears
+# means a rebuild instead of a dead stop.
+DEPS       = $(OBJS:.o=.d)
+CHECK_DEPS = 0
+DEPFLAGS   = -MD -MP
+
 include $(CIRCLEHOME)/Rules.mk
 
 # The world must be the multicore one circle-libsdl2 configures: the shim's
@@ -204,8 +236,20 @@ DEFINE        += -DRAPI_GAME_DIR='"$(RAPI_GAME_DIR)"'
 # quietly win — the game would keep calling the stub and nothing would say
 # so. Pulling the archive in whole turns that into a duplicate-symbol error
 # at link time, which is the only moment it can still be cheap to fix.
-LIBS = --whole-archive $(SHIM)/libSDL2-$(RAPI_BOARD).a --no-whole-archive \
+SHIM_LIB = $(SHIM)/libSDL2-$(RAPI_BOARD).a
+
+LIBS = --whole-archive $(SHIM_LIB) --no-whole-archive \
 	$(CIRCLE_STDLIB_LIBS)
+
+# The shim archive is built in circle-libsdl2 and never here — it is a shared
+# dependency, and a rule here would rebuild it at whatever board and crossing
+# count this makefile happens to be running with. This rule exists only for the
+# case where it is absent: it runs then, and only then, because a target with a
+# recipe and no prerequisites is up to date as soon as the file exists.
+$(SHIM_LIB):
+	@echo "$@ is missing: the $(RAPI_BOARD) shim archive has not been built."
+	@echo "Run: $(MAKE) -C $(SHIM) libSDL2-$(RAPI_BOARD).a BOARD=$(RAPI_BOARD)"
+	@exit 1
 
 # ---------------------------------------------------------------------------
 # Calls redirected at link time
@@ -257,21 +301,14 @@ LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS) $(WRAPPED_SDL))
 # over Rules.mk's in-place %.o/%.d, so nothing is written beside the source.
 $(OBJDIR)/%.o: %.cpp | $(OBJDIR)
 	@echo "  CPP   $@"
-	@$(CPP) $(CPPFLAGS) -c -o $@ $<
-
-$(OBJDIR)/%.d: %.cpp | $(OBJDIR)
-	@$(CPP) $(CPPFLAGS) -M -MG -MT $(@:.d=.o) -MT $@ -MF $@ $<
+	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # The engine's objects, mirroring its source tree under $(OBJDIR)/nx/. The
 # source tree itself is the upstream submodule, and is never written to.
 $(OBJDIR)/nx/%.o: $(NX)/src/%.cpp
 	@mkdir -p $(dir $@)
 	@echo "  CPP   $@"
-	@$(CPP) $(CPPFLAGS) -c -o $@ $<
-
-$(OBJDIR)/nx/%.d: $(NX)/src/%.cpp
-	@mkdir -p $(dir $@)
-	@$(CPP) $(CPPFLAGS) -M -MG -MT $(@:.d=.o) -MT $@ -MF $@ $<
+	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # The engine's main() is the program's entry point on a desktop, but here
 # main() belongs to the Circle kernel (main.cpp in this directory), which
@@ -281,11 +318,7 @@ $(OBJDIR)/nx/%.d: $(NX)/src/%.cpp
 $(OBJDIR)/nx/main.o: $(NX)/src/main.cpp
 	@mkdir -p $(dir $@)
 	@echo "  CPP   $@ (entry point renamed)"
-	@$(CPP) $(CPPFLAGS) -Dmain=nx_main -c -o $@ $<
-
-$(OBJDIR)/nx/main.d: $(NX)/src/main.cpp
-	@mkdir -p $(dir $@)
-	@$(CPP) $(CPPFLAGS) -Dmain=nx_main -M -MG -MT $(@:.d=.o) -MT $@ -MF $@ $<
+	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -Dmain=nx_main -c -o $@ $<
 
 $(OBJDIR):
 	@mkdir -p $(OBJDIR)
@@ -325,3 +358,14 @@ image: $(TARGET).img
 .PHONY: clean-board
 clean-board:
 	rm -rf $(OBJDIR)
+
+# This board from nothing. An incremental build is a decision made from
+# timestamps, and a timestamp says when a file was written rather than what is
+# in it; anything read off the resulting image describes what the last build
+# happened to put there. Take a measurement that has to be right off one of
+# these.
+.PHONY: rebuild
+rebuild:
+	+@$(NOT_DRY_RUN)
+	@$(MAKE) clean-board RAPI_BOARD=$(RAPI_BOARD)
+	@$(MAKE) image RAPI_BOARD=$(RAPI_BOARD)
