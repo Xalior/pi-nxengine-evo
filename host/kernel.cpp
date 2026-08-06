@@ -6,12 +6,17 @@
 // implementation. This file supplies the first two and starts the third,
 // then calls the engine's entry point.
 //
-// The engine parses no command line of its own. Every path it uses is built
+// EVERYTHING THIS GAME TOUCHES LIVES IN ONE DIRECTORY ON THE CARD,
+// RAPI_GAME_DIR (see host/Makefile). A card carries several games, and two of
+// them writing a settings file into the FAT root would each silently
+// overwrite the other's.
+//
+// The engine parses no command line of its own; every path it uses is built
 // at runtime from two SDL calls — SDL_GetBasePath for the read-only data and
-// SDL_GetPrefPath for saved games and settings — and both are answered by
-// sdl2_paths.cpp in this directory with fixed absolute paths on the card. A
-// bare-metal program has no shell to give it a meaningful working directory,
-// so nothing here is relative.
+// SDL_GetPrefPath for saved games and settings — and sdl2_paths.cpp answers
+// both with that directory. This kernel also makes it the working directory
+// before the game starts, so anything opened by a relative name lands there
+// too rather than in the root.
 //
 // This kernel also decides the core layout (see kernel.h for the roles) and
 // hands one core to the shim's presentation worker. The library never starts
@@ -25,6 +30,7 @@
 #include <circle/machineinfo.h>
 #include <SDL2/SDL_circle.h>
 #include <SDL2/SDL_error.h>
+#include <unistd.h>
 #include <atomic>
 
 // NXEngine-evo's entry point. It is main() in the upstream source; the build
@@ -243,6 +249,19 @@ TShutdownMode CKernel::Run(void)
                    SDL2Circle_CPUClockRate() / 1000000,
                    CMachineInfo::Get()->GetClockRate(CLOCK_ID_CORE) / 1000000,
                    CKernelOptions::Get()->GetSoCMaxTemp());
+
+    // Move into this game's own directory before the game runs, so anything
+    // it opens by a relative name lands there and never in the card's root.
+    // SDL_GetBasePath and SDL_GetPrefPath already answer with the same place
+    // (sdl2_paths.cpp); this covers whatever neither of them names.
+    //
+    // Done here, on core 0, before the application core is released: the
+    // working directory is one global that the split and the
+    // everything-on-core-0 path both inherit, so this covers each once.
+    if (chdir(RAPI_GAME_DIR) != 0)
+        m_Logger.Write(From, LogWarning,
+                       "could not enter " RAPI_GAME_DIR
+                       " — relative paths will resolve at the card root");
 
     int res;
     if (m_bSplit)

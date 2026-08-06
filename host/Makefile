@@ -181,6 +181,22 @@ DEFINE += -D__unix__
 # without one is set, and it prints "+??:??" where the offset would go.
 DEFINE += -DSPDLOG_NO_TZ_OFFSET
 
+# EVERYTHING THIS GAME TOUCHES LIVES IN ONE DIRECTORY ON THE CARD. A card
+# carries several games, and two of them writing a settings file into the FAT
+# root would each silently overwrite the other's. Under /games/ rather than at
+# the root so a dozen of them do not sprawl across it.
+#
+# A build-time constant, not a boot switch: a card's layout is decided when the
+# card is staged, and a game that could be relocated at boot would only mean
+# two places to look for the same file.
+#
+# The engine asks SDL where it lives — SDL_GetBasePath for the resources it
+# reads and SDL_GetPrefPath for saved games and settings — so both are
+# answered with this, in sdl2_paths.cpp. Upstream is never told about it and
+# needs no patch: it asks, and it is told.
+RAPI_GAME_DIR ?= /games/nxengine-evo
+DEFINE        += -DRAPI_GAME_DIR='"$(RAPI_GAME_DIR)"'
+
 # The shim comes in whole, every member, rather than only the members the
 # link happens to need. An object file linked straight into the kernel beats
 # an archive member of the same name and does it silently, so a stub in this

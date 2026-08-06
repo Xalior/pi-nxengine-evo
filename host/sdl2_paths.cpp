@@ -47,32 +47,33 @@ char *Duplicate(const char *s)
 
 extern "C" {
 
+// Where the game's own files live: RAPI_GAME_DIR, this game's directory on
+// the card and nowhere else. A card carries several games, and answering "/"
+// here would put this one's resources in the root among all of them.
 char *SDL_GetBasePath(void)
 {
-    return Duplicate("/");
+    return Duplicate(RAPI_GAME_DIR "/");
 }
 
-// The organisation name is ignored, as it is on the platforms where SDL2 has
-// nowhere to put it. The application name is not: it is what makes the
-// directory, so a second program on the same card gets its own.
+// Saved games and settings, in that same directory. The organisation and
+// application names are ignored, as the organisation name is on every
+// platform where SDL2 has nowhere to put it: the card directory is already
+// this game's alone, so deriving a further directory from a name the engine
+// chooses would only bury the saves one level deeper than the data.
 char *SDL_GetPrefPath(const char *org, const char *app)
 {
     (void)org;
+    (void)app;
 
-    char path[256];
-    if (app == nullptr || *app == '\0')
-        app = "app";
-    snprintf(path, sizeof(path), "/%s/", app);
-
-    // Trailing separator removed for the call that makes it: FatFs rejects a
-    // path ending in one.
-    char dir[256];
-    snprintf(dir, sizeof(dir), "/%s", app);
+    // Made if it is not there, because saving is the first thing that needs
+    // it and the card may carry only the read-only tree. The trailing
+    // separator is left off the call that makes it: FatFs rejects a path
+    // ending in one.
     struct stat st;
-    if (stat(dir, &st) != 0)
-        mkdir(dir, 0777);
+    if (stat(RAPI_GAME_DIR, &st) != 0)
+        mkdir(RAPI_GAME_DIR, 0777);
 
-    return Duplicate(path);
+    return Duplicate(RAPI_GAME_DIR "/");
 }
 
 } // extern "C"
