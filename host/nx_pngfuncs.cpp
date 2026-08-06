@@ -9,10 +9,10 @@
 // untouched. The declarations both files answer to are in upstream's
 // pngfuncs.h, which is what the game includes.
 //
-// Saving a screenshot cannot work here for a reason further up anyway: the
-// finished picture is assembled on the presentation core and handed to the
-// framebuffer, so SDL_RenderReadPixels has nothing to hand back and fails
-// first. This function is never reached with a real surface.
+// Reading pixels back from the frame now works — circle-libsdl2 implements
+// SDL_RenderReadPixels for real — so the screenshot key's remaining problem
+// is narrower than it once was: there is a picture to save, and nowhere to
+// encode it. Writing a PNG needs an encoder this machine does not have.
 //
 #include <SDL2/SDL.h>
 
@@ -24,11 +24,12 @@ int png_save_surface(const std::string &filename, SDL_Surface *surf)
 {
     (void)filename;
     (void)surf;
-    SDL_SetError("writing PNG files is not available");
+    SDL_SetError("writing PNG files is not available: there is no PNG "
+                 "encoder on this machine");
     return -1;
 }
 
-// Reading is available — sdl2_image.cpp has a PNG reader — so this answers
+// Reading is available — circle-libsdl2 has a PNG reader — so this answers
 // with it rather than refusing. Nothing in the game calls this, but the
 // header declares it and a build should not carry a second, worse answer to
 // a question already answered.

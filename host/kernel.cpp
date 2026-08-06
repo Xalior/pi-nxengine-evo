@@ -13,8 +13,9 @@
 //
 // The engine parses no command line of its own; every path it uses is built
 // at runtime from two SDL calls — SDL_GetBasePath for the read-only data and
-// SDL_GetPrefPath for saved games and settings — and sdl2_paths.cpp answers
-// both with that directory. This kernel also makes it the working directory
+// SDL_GetPrefPath for saved games and settings — and SDL2Circle_DeclareBasePath
+// below tells the library that directory once, before either is ever called.
+// This kernel also makes it the working directory
 // before the game starts, so anything opened by a relative name lands there
 // too rather than in the root.
 //
@@ -272,10 +273,18 @@ TShutdownMode CKernel::Run(void)
                                     s_FinalArgv,
                                     sizeof(s_FinalArgv) / sizeof(s_FinalArgv[0]));
 
+    // Tell the library where this game's files live, once and before
+    // SDL_Init runs inside the engine (main.cpp, renamed nx_main below):
+    // SDL_GetBasePath and SDL_GetPrefPath compose their answers from this
+    // declaration from then on.
+    if (SDL2Circle_DeclareBasePath(RAPI_GAME_DIR) != 0)
+        m_Logger.Write(From, LogWarning,
+                       "SDL2Circle_DeclareBasePath failed: %s", SDL_GetError());
+
     // Move into this game's own directory before the game runs, so anything
     // it opens by a relative name lands there and never in the card's root.
-    // SDL_GetBasePath and SDL_GetPrefPath already answer with the same place
-    // (sdl2_paths.cpp); this covers whatever neither of them names.
+    // SDL_GetBasePath and SDL_GetPrefPath already answer with the same place;
+    // this covers whatever neither of them names.
     //
     // Done here, on core 0, before the application core is released: the
     // working directory is one global that the split and the

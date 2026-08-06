@@ -132,12 +132,6 @@ Built and expected to work, because the SDL2 layer underneath it is proven by
 other games on the same boards: fullscreen software rendering, HDMI audio,
 USB keyboards and USB game controllers.
 
-Two parts of the port were checked against a reference decoder on a desktop
-machine, byte for byte, rather than left to the first boot to discover: the
-PNG reader in `host/sdl2_image.cpp` on the engine's own font atlases, and the
-bitmap reader in `host/sdl2_bmp.cpp` on the 24-bit and 8-bit images the
-engine ships.
-
 Known to be missing, and why:
 
 - **Replacement soundtracks.** The optional Ogg Vorbis soundtracks need a
@@ -145,9 +139,9 @@ Known to be missing, and why:
   music directories in the options menu leaves the game silent; the original
   Organya soundtrack is synthesised by the engine itself and needs no decoder,
   so that is the one that plays.
-- **Screenshots.** The finished picture is assembled on the presentation core
-  and handed straight to the display, so there is nothing for the screenshot
-  key to read back.
+- **Screenshots.** Reading the frame back works, but there is no PNG encoder
+  on this machine to write it out with, so the screenshot key still fails —
+  now for lack of an encoder rather than for lack of a picture.
 - **Rumble.** The engine drives force feedback through `SDL_Haptic`, which the
   SDL2 layer does not implement.
 - **Rotated drawing.** `SDL_RenderCopyEx` here mirrors but does not rotate.
@@ -159,21 +153,18 @@ across three generations of board.
 
 ## What `host/` contains
 
-The kernel is the smallest part of it. Most of `host/` is the difference
-between what NXEngine-evo asks SDL for and what circle-libsdl2 provides, and
-each file says at the top what it is answering for:
+The kernel is the smallest part of it. circle-libsdl2 now carries the whole
+SDL2 surface NXEngine-evo asks for — SDL_image, SDL_mixer, audio conversion,
+surfaces and textures included — so what is left here is what is genuinely
+this board's own: bring-up, the core split, and the one narrow gap the
+library still leaves.
 
 | File | What it is for |
 |---|---|
-| `kernel.cpp`, `main.cpp` | bring the board up, elect the cores, call the game |
+| `kernel.cpp`, `main.cpp` | bring the board up, elect the cores, call the game, and declare where its files live (`SDL2Circle_DeclareBasePath`) |
 | `circle_syscalls.cpp` | file access from a core that may not touch the card |
-| `sdl2_bmp.cpp` | `SDL_LoadBMP`, which is how every piece of artwork is read |
-| `sdl2_image.cpp` | `IMG_Load`, with a PNG reader and a DEFLATE decompressor, because there is no libpng or zlib here |
-| `sdl2_mixer.cpp` | the SDL_mixer channel mixer the engine plays its sound through |
-| `sdl2_audiocvt.cpp` | the sample-format and rate conversion the engine's sound synthesis needs |
-| `sdl2_surface.cpp`, `sdl2_texture.cpp` | surfaces, colour keys, and drawing a sprite mirrored |
-| `sdl2_paths.cpp` | where the game's files are, on a machine with no shell |
-| `sdl2_render.cpp`, `sdl2_keyname.cpp`, `circle_stubs.cpp` | the smaller gaps |
+| `sdl2_window.cpp` | the input-focus flag the SDL2 layer does not set, wrapped in at link time |
+| `nx_pngfuncs.cpp` | the engine's screenshot PNG writer and reader, which need no libpng here |
 
 ## License
 
