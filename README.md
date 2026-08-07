@@ -151,21 +151,6 @@ There is no GPU driver on bare metal, so everything is drawn by the processor.
 That is the design rather than a limitation: it is what makes one build run
 across three generations of board.
 
-## What `host/` contains
-
-The kernel is the smallest part of it. circle-libsdl2 now carries the whole
-SDL2 surface NXEngine-evo asks for — SDL_image, SDL_mixer, audio conversion,
-surfaces and textures included — so what is left here is what is genuinely
-this board's own: bring-up, the core split, and the one narrow gap the
-library still leaves.
-
-| File | What it is for |
-|---|---|
-| `kernel.cpp`, `main.cpp` | bring the board up, elect the cores, call the game, and declare where its files live (`SDL2Circle_DeclareBasePath`) |
-| `circle_syscalls.cpp` | file access from a core that may not touch the card |
-| `sdl2_window.cpp` | the input-focus flag the SDL2 layer does not set, wrapped in at link time |
-| `nx_pngfuncs.cpp` | the engine's screenshot PNG writer and reader, which need no libpng here |
-
 ## License
 
 The code in this repository — the kernel layer in `host/` and the build — is
