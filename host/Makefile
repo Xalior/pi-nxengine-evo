@@ -57,7 +57,15 @@ endif
 # The board's circle-stdlib world. A `make deps` that has not been run, or has
 # not finished, leaves this file absent; make would then report that it has no
 # rule to make a Config.mk, which describes the symptom and not the cause.
-WORLD = $(SHIM)/circle-stdlib-$(RAPI_BOARD)
+# WHERE THE BUILT WORLD COMES FROM.
+#
+# The default is this game's own nested shim, so a clone of this repository
+# alone builds and uses its own worlds and nothing needs setting. A parent
+# that keeps ONE set of built worlds for several games — they are gigabytes
+# each, and identical when the pin and the configuration match — points
+# CIRCLE_WORLDS at them.
+CIRCLE_WORLDS ?= $(SHIM)
+WORLD = $(CIRCLE_WORLDS)/circle-stdlib-$(RAPI_BOARD)
 ifeq ($(wildcard $(WORLD)/Config.mk),)
 $(error the $(RAPI_BOARD) circle-stdlib world is not configured ($(WORLD)/Config.mk is missing) — run 'make deps-$(RAPI_BOARD)' at the repository root)
 endif
@@ -78,7 +86,7 @@ TARGET = $(OBJDIR)/$(IMAGE)
 # parts of SDL2 that circle-libsdl2 does not implement and this game needs.
 # Each file says at its top what it is answering for.
 HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
-	sdl2_window.cpp nx_pngfuncs.cpp
+	nx_pngfuncs.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
 # NXEngine-evo's source list, as its own CMakeLists.txt globs it for the `nx`
@@ -278,19 +286,10 @@ WRAPPED_SYSCALLS = \
 	_fcntl mkdir chdir getcwd dup dup2 \
 	opendir readdir closedir rewinddir
 
-# The same technique, for a call the shim already implements and this port
-# only needs to happen alongside. Wrapping keeps the library's own version as
-# the thing that does the work:
-#
-#   SDL_GetWindowFlags   the window always holds the input focus here, and the
-#                        game refuses to draw into one that does not
-#                        (sdl2_window.cpp).
-WRAPPED_SDL = SDL_GetWindowFlags
-
 # The link is driven by the cross ld directly (Circle's Rules.mk sets
 # LD = <prefix>ld for GCC builds), so these are plain linker options, not
 # compiler-driver -Wl, ones.
-LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS) $(WRAPPED_SDL))
+LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS))
 
 # ---------------------------------------------------------------------------
 # Compilation
