@@ -188,13 +188,16 @@ $(error the payload requires the multicore circle-stdlib world — build it with
 endif
 
 # The engine writes `#include <SDL.h>`, `<SDL_image.h>` and `<SDL_mixer.h>`,
-# the spellings a desktop sdl2-config include path provides. The shim's SDL2/
-# directory answers the first; this project's own include/SDL2 answers the
-# other two, with the API surfaces implemented here. Its own root and deps/
-# are on the path because its CMakeLists.txt puts them there: the header-only
-# libraries it vendors — nlohmann/json, utf8, spdlog — are included by bare
-# name.
-INCLUDE := -I include -I include/SDL2 -I $(SHIM)/include -I $(SHIM)/include/SDL2 \
+# the spellings a desktop sdl2-config include path provides, and the shim's
+# SDL2/ directory answers all three. Nothing of this project's own goes ahead
+# of it: a header here named after one of the library's would shadow it, and
+# a cut-down copy that declares a narrower API — or the same call with a
+# different signature — produces no error anywhere, because a header defines
+# no symbols for the --whole-archive link below to catch. The engine's own
+# root and deps/ are on the path because its CMakeLists.txt puts them there:
+# the header-only libraries it vendors — nlohmann/json, utf8, spdlog — are
+# included by bare name.
+INCLUDE := -I $(SHIM)/include -I $(SHIM)/include/SDL2 \
 	-I $(NX) -I $(NX)/deps $(CIRCLE_STDLIB_INCLUDES) $(INCLUDE)
 
 # The engine asks the preprocessor which operating system it is on, and

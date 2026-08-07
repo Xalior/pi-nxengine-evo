@@ -15,10 +15,9 @@
 // encode it. Writing a PNG needs an encoder this machine does not have.
 //
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 
 #include <string>
-
-extern "C" SDL_Surface *IMG_Load(const char *file);
 
 int png_save_surface(const std::string &filename, SDL_Surface *surf)
 {
