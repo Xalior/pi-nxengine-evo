@@ -293,6 +293,19 @@ TShutdownMode CKernel::Run(void)
                        "could not enter " RAPI_GAME_DIR
                        " — relative paths will resolve at the card root");
 
+    // Lend the library this kernel's serial device, so a console attached to
+    // the port can type into the running game. Unconditional: whether
+    // anything is injected through it is the library's decision, taken from
+    // the --rapi-debug-uart switch it reads for itself out of the defaults
+    // block. A kernel must lend rather than construct — a second CSerialDevice
+    // on the same slot halts the board inside its constructor.
+    //
+    // Here, before the split is armed and before the application core is let
+    // go: the injection pump runs in the hardware core's servo, which is
+    // where reading the serial port is legal, and that servo does not exist
+    // until SDL2Circle_SplitInit below.
+    SDL2Circle_SetInjectSerial(&m_Serial);
+
     int res;
     m_Logger.Write(From, LogNotice,
                    "core split: hardware core 0, application core 1, presentation core 2");
