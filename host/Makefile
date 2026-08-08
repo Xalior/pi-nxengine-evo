@@ -95,17 +95,6 @@ HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
 	nx_pngfuncs.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
-# The SD card's read cache, which lives in circle-libsdl2 rather than here.
-#
-# It is not part of SDL and does not use it: it is Circle device-layer code
-# that wraps the card and is picked up by name, so FatFs and every file the
-# engine opens go through it without knowing. It is kept in that repository
-# because that is where the shared pieces are today, and it is compiled
-# straight into this kernel — there is no library to link, and no other port
-# has to agree with this one about how it is built.
-DISKCACHE_DIR = $(SHIM)/circle-diskcache
-DISKCACHE_OBJ = $(OBJDIR)/diskcache.o
-
 # NXEngine-evo's source list, as its own CMakeLists.txt globs it for the `nx`
 # target, with two differences:
 #
@@ -173,7 +162,7 @@ NX_SRCS = \
 
 NX_OBJS = $(addprefix $(OBJDIR)/nx/,$(NX_SRCS:.cpp=.o))
 
-OBJS = $(HOST_OBJS) $(DISKCACHE_OBJ) $(NX_OBJS)
+OBJS = $(HOST_OBJS) $(NX_OBJS)
 
 STANDARD = -std=gnu++17
 
@@ -209,6 +198,11 @@ DEPFLAGS   = -MD -MP
 # there is only ever one recipe for the image.
 SDL_APP_IMAGE := $(TARGET)
 TARGET := $(OBJDIR)/.circle-unused
+
+# The SD card's read cache. See circle-libsdl2/circle-diskcache/README.md for
+# what the fragment does and why this line comes before Rules.mk.
+include $(SHIM)/circle-diskcache/diskcache.mk
+
 include $(CIRCLEHOME)/Rules.mk
 TARGET := $(SDL_APP_IMAGE)
 
@@ -232,7 +226,6 @@ endif
 # the header-only libraries it vendors — nlohmann/json, utf8, spdlog — are
 # included by bare name.
 INCLUDE := -I $(SHIM)/include -I $(SHIM)/include/SDL2 \
-	-I $(DISKCACHE_DIR) \
 	-I $(NX) -I $(NX)/deps $(CIRCLE_STDLIB_INCLUDES) $(INCLUDE)
 
 # The engine asks the preprocessor which operating system it is on, and
@@ -325,13 +318,6 @@ LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS))
 # This project's own objects, board-scoped. These more-specific rules win
 # over Rules.mk's in-place %.o/%.d, so nothing is written beside the source.
 $(OBJDIR)/%.o: %.cpp | $(OBJDIR)
-	@echo "  CPP   $@"
-	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -c -o $@ $<
-
-# The disk cache, which lives outside this directory. Its own rule because
-# the pattern rule above only reaches sources beside this makefile, and its
-# object goes in this board's tree like every other.
-$(DISKCACHE_OBJ): $(DISKCACHE_DIR)/diskcache.cpp | $(OBJDIR)
 	@echo "  CPP   $@"
 	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -c -o $@ $<
 
