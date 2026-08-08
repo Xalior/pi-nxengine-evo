@@ -7,6 +7,11 @@ Linux, no desktop, no launcher, and nothing else running beside it.
 It builds for the Raspberry Pi 3, Pi 4 and Pi 5, all three from one source
 tree.
 
+![Cave Story running on a Raspberry Pi 5 with no operating system](docs/nxengine-on-bare-metal.jpg)
+
+*Captured from the Pi 5's HDMI output. The board is running this image and
+nothing else — no kernel underneath it, no window system, no launcher.*
+
 ## What this is
 
 [NXEngine-evo](https://github.com/nxengine/nxengine-evo) is an ordinary SDL2
@@ -20,14 +25,24 @@ pinned at an upstream commit, and the build reads it without ever writing to
 it. Everything the engine needs that the SDL2 layer does not already provide
 is added beside it, in `host/`.
 
-Three processor cores are given separate work:
+The game draws at its own resolution and the picture is scaled once onto
+whatever your screen actually is.
 
-- **Core 0** owns the hardware. Circle's world lives here — interrupts, USB,
-  the SD card, sound — and no other core touches a device.
-- **Core 1** runs the game and nothing else.
-- **Core 2** puts finished frames on the screen. The game draws at its own
-  resolution and never learns the display's; the picture is scaled once, at
-  the end, onto whatever the screen is really showing.
+## What works
+
+Cave Story plays, with the Organya soundtrack the engine synthesises itself.
+
+- **Picture and sound.** The game and its original music.
+- **Keyboard and game controllers.** Both.
+- **Saved games and settings.** Written back to the SD card.
+
+What is missing:
+
+- **The replacement Ogg soundtracks.** Choosing one of those music
+  directories in the options leaves the game silent. The original Organya
+  soundtrack is the one that plays.
+- **Screenshots.** The screenshot key cannot write a file out.
+- **Rumble.** Force feedback on a controller does nothing.
 
 ## Building
 
@@ -110,46 +125,19 @@ in the directory holding your copy of Cave Story. It writes a `data/`
 directory. Copy the contents of that directory into the card's `data/`
 directory, beside the files `make card` already put there.
 
-## The fan pin in `cmdline.txt`
+## Keeping it cool
 
-One card boots any of the three boards, so all three read the same
-`cmdline.txt`. It carries `socmaxtemp=70`, the temperature in degrees Celsius
-at which the board starts protecting itself by slowing the processor down.
+The card carries `cmdline.txt`, which sets the temperature the board is
+allowed to reach and the pin its fan is on:
 
-Adding `gpiofanpin=<pin>` changes what happens at that temperature: the fan on
-that pin is switched on and the processor is left at full speed, instead of
-being slowed. Pin 45 is where a Raspberry Pi 5 Case Fan or Active Cooler is
-wired. On a Pi 3 or a Pi 4 the pin depends on how you wired your own fan.
+    socmaxtemp=70 gpiofanpin=45
 
-## What is built, and what is not yet proven
+Pin 45 is the Raspberry Pi 5 Case Fan and Active Cooler. With a fan named,
+reaching 70°C switches the fan on and the processor keeps running at full
+speed. Without one it would be slowed down instead, and a slowed processor
+drops frames.
 
-The three kernel images build and link, and the SD card the build stages is
-complete apart from Cave Story's own files. **Nothing here has been run on a
-board yet**, so treat everything below as what the code is written to do
-rather than as what has been seen to happen.
-
-Built and expected to work, because the SDL2 layer underneath it is proven by
-other games on the same boards: fullscreen software rendering, HDMI audio,
-USB keyboards and USB game controllers.
-
-Known to be missing, and why:
-
-- **Replacement soundtracks.** The optional Ogg Vorbis soundtracks need a
-  Vorbis decoder, and there is none on this machine. Choosing one of those
-  music directories in the options menu leaves the game silent; the original
-  Organya soundtrack is synthesised by the engine itself and needs no decoder,
-  so that is the one that plays.
-- **Screenshots.** Reading the frame back works, but there is no PNG encoder
-  on this machine to write it out with, so the screenshot key still fails —
-  now for lack of an encoder rather than for lack of a picture.
-- **Rumble.** The engine drives force feedback through `SDL_Haptic`, which the
-  SDL2 layer does not implement.
-- **Rotated drawing.** `SDL_RenderCopyEx` here mirrors but does not rotate.
-  The engine only ever asks it to mirror.
-
-There is no GPU driver on bare metal, so everything is drawn by the processor.
-That is the design rather than a limitation: it is what makes one build run
-across three generations of board.
+If your fan is wired somewhere else, change the pin number.
 
 ## License
 
